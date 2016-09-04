@@ -26,10 +26,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Printf("google app credentials file: [%v]", authfile)
+	log.Printf("google app credentials file: [%v]", *authfile)
 	jsonKey, err := ioutil.ReadFile(*authfile)
 	if err != nil {
-		log.Fatalf("cannot read file [%v]", authfile)
+		log.Fatalf("cannot read file [%v]", *authfile)
 	}
 
 	config, err := google.JWTConfigFromJSON(jsonKey, bigtable.Scope, bigtable.AdminScope)
