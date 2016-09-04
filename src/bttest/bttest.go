@@ -77,8 +77,8 @@ func main() {
 
 	tbl := client.Open("table1")
 	mut := bigtable.NewMutation()
-	mut.Set("cf1", "c1", bigtable.Now(), []byte("A"))
-	mut.Set("cf1", "c2", bigtable.Now(), []byte("B"))
+	mut.Set("cf1", "c1", 0, []byte("A"))
+	mut.Set("cf1", "c2", 0, []byte("B"))
 	err = tbl.Apply(ctx, "r1", mut)
 	if err != nil {
 		log.Fatalf("cannot apply mutation, err [%v]", err)
