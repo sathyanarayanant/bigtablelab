@@ -39,36 +39,80 @@ func main() {
 	client, _ := btutil.Clients(*project, *instance, *authfile)
 	tbl := client.Open("sec")
 
-	const ch_buffer_size = 10 * 1000 * 1000
-	ch := make(chan btutil.KeyValueEpochsec, ch_buffer_size)
+	const ch_buffer_size = 1000
+	ch := make(chan []btutil.KeyValueEpochsec, ch_buffer_size)
 
 	sleepDuration := time.Second * 5
 	go genMetrics(dataPointsPerSec*5, sleepDuration, ch)
 
 	ctx := context.Background()
-	//read from channel and write to bigtable
-	for e := range ch {
-		mut := bigtable.NewMutation()
-		mut.Set("0", "0", 0, e.ValueByteArray())
 
-		err := tbl.Apply(ctx, string(e.BTRowKey()), mut)
-		if err != nil {
-			log.Printf("got error [%v] when applying mutation", err)
-		}
-	}
+	const num_savers = 100
+	go readChAndSaveToBT(ctx, ch, tbl)
 
 	select {}
 }
 
-func genMetrics(n int, sleepDuration time.Duration, ch chan<- btutil.KeyValueEpochsec) {
+func readChAndSaveToBT(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec, tbl *bigtable.Table) {
+	for slice := range ch {
+
+		var rowKeys []string
+		var muts []*bigtable.Mutation
+		for _, e := range slice {
+			mut := bigtable.NewMutation()
+			mut.Set("0", "0", 0, e.ValueByteArray())
+
+			muts = append(muts, mut)
+			rowKeys = append(rowKeys, e.BTRowKeyStr())
+		}
+
+		errors, err := tbl.ApplyBulk(ctx, rowKeys, muts)
+		if err != nil {
+			log.Printf("entire bulk mutation failed. err [%v]", err)
+			continue
+		}
+		if errors != nil {
+			var i int
+			for _, e := range errors {
+				if err != nil {
+					log.Printf("applybulk failed for rowkey [%v], err [%v]", rowKeys[i], e)
+				}
+				i++
+			}
+			continue
+		}
+
+		log.Printf("applybulk success")
+	}
+}
+
+func genMetrics(n int, sleepDuration time.Duration, ch chan<- []btutil.KeyValueEpochsec) {
 
 	for {
 		now := time.Now().Unix()
+		const size = 10000
+		var slice []btutil.KeyValueEpochsec
+		var sliceOfSlice [][]btutil.KeyValueEpochsec
+		var j int
 		for i := 0; i < n; i++ {
 			kves := btutil.KeyValueEpochsec{getKey(i), float64(now), uint32(now)}
+			if j < size {
+				j++
+				slice = append(slice, kves)
+			} else {
+				sliceOfSlice = append(sliceOfSlice, slice)
+				slice = make([]btutil.KeyValueEpochsec, 0)
+				j = 0
+			}
+		}
 
+		if len(slice) > 0 {
+			sliceOfSlice = append(sliceOfSlice, slice)
+		}
+
+		for _, slice = range sliceOfSlice {
 			select {
-			case ch <- kves:
+			case ch <- slice:
 			default:
 				log.Fatalf("cannot write to ch. pctFull [%v]", pctFull(ch))
 			}
@@ -84,6 +128,6 @@ func getKey(i int) string {
 	return fmt.Sprintf("key_%v", i)
 }
 
-func pctFull(ch chan<- btutil.KeyValueEpochsec) float64 {
+func pctFull(ch chan<- []btutil.KeyValueEpochsec) float64 {
 	return float64(len(ch)) / float64(cap(ch))
 }
