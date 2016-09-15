@@ -20,6 +20,7 @@ func main() {
 		authfile = flag.String("authjson", "", "Google application credentials json file.")
 		table    = flag.String("table", "", "Table to write metrics.")
 		dps      = flag.String("dps", "", "Data points per second.")
+		numSavers = flag.Int("num_savers", 100, "num saving goroutines")
 	)
 
 	flag.Parse()
@@ -37,9 +38,9 @@ func main() {
 	}
 
 	client, _ := btutil.Clients(*project, *instance, *authfile)
-	tbl := client.Open("sec")
+	tbl := client.Open(*table)
 
-	const ch_buffer_size = 1000
+	const ch_buffer_size = 200
 	ch := make(chan []btutil.KeyValueEpochsec, ch_buffer_size)
 
 	sleepDuration := time.Second * 5
@@ -47,13 +48,15 @@ func main() {
 
 	ctx := context.Background()
 
-	const num_savers = 100
-	go readChAndSaveToBT(ctx, ch, tbl)
+	log.Printf("num savers: [%v]", *numSavers)
+	for i := 0; i < *numSavers; i++ {
+		go readChAndSaveToBT(ctx, ch, tbl, i)
+	}
 
 	select {}
 }
 
-func readChAndSaveToBT(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec, tbl *bigtable.Table) {
+func readChAndSaveToBT(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec, tbl *bigtable.Table, saver int) {
 	for slice := range ch {
 
 		var rowKeys []string
@@ -66,6 +69,7 @@ func readChAndSaveToBT(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec,
 			rowKeys = append(rowKeys, e.BTRowKeyStr())
 		}
 
+		start := time.Now()
 		errors, err := tbl.ApplyBulk(ctx, rowKeys, muts)
 		if err != nil {
 			log.Printf("entire bulk mutation failed. err [%v]", err)
@@ -82,7 +86,7 @@ func readChAndSaveToBT(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec,
 			continue
 		}
 
-		log.Printf("applybulk success")
+		log.Printf("saver-%v took [%v]", saver, time.Since(start))
 	}
 }
 
