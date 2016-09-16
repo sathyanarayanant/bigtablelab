@@ -123,8 +123,12 @@ func query(ctx context.Context, qc queryCondition, tbl *bigtable.Table) {
 	atomic.AddUint64(&totalQueryTimeMillis, uint64(time.Since(start).Nanoseconds()/1000/1000))
 	atomic.AddUint64(&numQueries, 1)
 
-	age := uint32(time.Now().Unix()) - results[len(results) - 1].Epochsec
-	atomic.AddUint64(&totalLastDatapointAgeSeconds, uint64(age))
+	if len(results) > 0 {
+		age := uint32(time.Now().Unix()) - results[len(results) - 1].Epochsec
+		atomic.AddUint64(&totalLastDatapointAgeSeconds, uint64(age))
+	} else {
+		log.Printf("empty result for qc: %+v", qc)
+	}
 }
 
 func genQueries(n int, ch chan<- queryCondition) {
