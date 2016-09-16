@@ -1,30 +1,30 @@
 package main
 
 import (
-	"flag"
-	"os"
 	"btutil"
-	"cloud.google.com/go/bigtable"
-	"time"
-	"golang.org/x/net/context"
-	"log"
 	"bytes"
 	"encoding/binary"
+	"flag"
 	"fmt"
-	"google.golang.org/grpc/credentials"
+	"log"
+	"os"
+	"time"
+
+	"cloud.google.com/go/bigtable"
+	"golang.org/x/net/context"
 )
 
 type queryCondition struct {
-	target string
+	target      string
 	from, until time.Time
 }
 
 func main() {
 	var (
-		project   = flag.String("project", "", "The name of the project.")
-		instance  = flag.String("instance", "", "The name of the Cloud Bigtable instance.")
+		project  = flag.String("project", "", "The name of the project.")
+		instance = flag.String("instance", "", "The name of the Cloud Bigtable instance.")
 		authfile = flag.String("authjson", "", "Google application credentials json file.")
-		qps = flag.Int("qps", 1000, "queries per second. ")
+		qps      = flag.Int("qps", 1000, "queries per second. ")
 	)
 
 	//eg: bin/btreadstress  -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -qps 500
@@ -38,7 +38,7 @@ func main() {
 	client, _ := btutil.Clients(*project, *instance, *authfile)
 	tbl := client.Open("sec")
 
-	ch := make(chan queryCondition, *qps * 5)
+	ch := make(chan queryCondition, *qps*5)
 
 	go genQueries(*qps, ch)
 
