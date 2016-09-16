@@ -11,6 +11,11 @@ import (
 
 	"cloud.google.com/go/bigtable"
 	"golang.org/x/net/context"
+	"sync/atomic"
+)
+
+var (
+	totalTimeMillis, numWrites uint64
 )
 
 func main() {
@@ -41,7 +46,7 @@ func main() {
 	client, _ := btutil.Clients(*project, *instance, *authfile)
 	tbl := client.Open(*table)
 
-	const ch_buffer_size = 200
+	const ch_buffer_size = 10000
 	ch := make(chan []btutil.KeyValueEpochsec, ch_buffer_size)
 
 	sleepDuration := time.Second * 5
@@ -54,7 +59,23 @@ func main() {
 		go readChAndSaveToBT(ctx, ch, tbl, i)
 	}
 
+	go periodicallyPrintMetrics(ch)
+
 	select {}
+}
+
+func periodicallyPrintMetrics(ch chan []btutil.KeyValueEpochsec) {
+	for {
+		n := atomic.LoadUint64(&numWrites)
+		if n != 0 {
+			avg := atomic.LoadUint64(&totalTimeMillis) / n
+			log.Printf("avg write time: [%v] millis, ch len: %v, cap: %v", avg, len(ch), cap(ch))
+		} else {
+			log.Printf("no writes yet")
+		}
+
+		time.Sleep(time.Second * 5)
+	}
 }
 
 func readChAndSaveToBT(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec, tbl *bigtable.Table, saver int) {
@@ -87,7 +108,8 @@ func readChAndSaveToBT(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec,
 			continue
 		}
 
-		log.Printf("saver-%v took [%v]", saver, time.Since(start))
+		atomic.AddUint64(&totalTimeMillis, uint64(time.Since(start).Nanoseconds()/1000/1000))
+		atomic.AddUint64(&numWrites, 1)
 	}
 }
 
@@ -123,7 +145,6 @@ func genMetrics(n int, sleepDuration time.Duration, ch chan<- []btutil.KeyValueE
 			}
 		}
 
-		log.Printf("ch pctFull [%v]", pctFull(ch))
 		time.Sleep(sleepDuration)
 	}
 
