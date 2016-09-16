@@ -46,7 +46,7 @@ func main() {
 	go genMetrics(*dps, ch1)
 
 	ch2 := make(chan []btutil.KeyValueEpochsec) //unbuffered channel
-	go periodicallyDrainAndWriteToCh(ch1, writeBatchSize, time.Second, ch2)
+	go periodicallyDrainAndWriteToCh(ch1, *writeBatchSize, time.Second, ch2)
 
 	ctx := context.Background()
 	log.Printf("num savers: [%v], write batch size [%v]", *numWriters, *writeBatchSize)
