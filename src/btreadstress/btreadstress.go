@@ -12,6 +12,7 @@ import (
 
 	"cloud.google.com/go/bigtable"
 	"golang.org/x/net/context"
+	"sync/atomic"
 )
 
 type queryCondition struct {
@@ -19,13 +20,17 @@ type queryCondition struct {
 	from, until time.Time
 }
 
+var (
+	totalQueryTimeMillis, numQueries, totalQueryResultLen uint64
+)
+
 func main() {
 	var (
 		project  = flag.String("project", "", "The name of the project.")
 		instance = flag.String("instance", "", "The name of the Cloud Bigtable instance.")
 		authfile = flag.String("authjson", "", "Google application credentials json file.")
 		qps      = flag.Int("qps", 1000, "queries per second. ")
-		numQueryWorkers = flag.Int("num_query_workers", 1000, "queries per second. ")
+		numQueryWorkers = flag.Int("num_query_workers", 100, "queries per second. ")
 	)
 
 	//eg: bin/btreadstress  -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -qps 500
@@ -35,6 +40,8 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+
+	log.Printf("num query workers: [%v]", *numQueryWorkers)
 
 	client, _ := btutil.Clients(*project, *instance, *authfile)
 	tbl := client.Open("sec")
@@ -48,7 +55,25 @@ func main() {
 		go queryWorker(ctx, ch, tbl)
 	}
 
+	go periodicallyPrintMetrics(ch, *qps)
+
 	select {}
+}
+
+func periodicallyPrintMetrics(ch chan queryCondition, qps int) {
+	for {
+		n := atomic.LoadUint64(&numQueries)
+		if n != 0 {
+			avgTime := atomic.LoadUint64(&totalQueryTimeMillis) / n
+			avgResultLen := atomic.LoadUint64(&totalQueryResultLen) / n
+			log.Printf("qps: [%v], avg query time [%v] millis, avg result len [%v], ch len: %v, cap: %v",
+				qps, avgTime, avgResultLen, len(ch), cap(ch))
+		} else {
+			log.Printf("no queries yet")
+		}
+
+		time.Sleep(time.Second * 5)
+	}
 }
 
 func queryWorker(ctx context.Context, ch <-chan queryCondition, tbl *bigtable.Table) {
@@ -95,7 +120,9 @@ func query(ctx context.Context, qc queryCondition, tbl *bigtable.Table) {
 		return
 	}
 
-	log.Printf("query completed in [%v]", time.Since(start))
+	atomic.AddUint64(&totalQueryTimeMillis, uint64(time.Since(start).Nanoseconds()/1000/1000))
+	atomic.AddUint64(&numQueries, 1)
+	atomic.AddUint64(&totalQueryResultLen, uint64(len(results)))
 }
 
 func genQueries(n int, ch chan<- queryCondition) {
@@ -111,7 +138,6 @@ func genQueries(n int, ch chan<- queryCondition) {
 			}
 		}
 
-		log.Printf("ch pctFull [%v]", pctFull(ch))
 		time.Sleep(time.Second * 1)
 	}
 }

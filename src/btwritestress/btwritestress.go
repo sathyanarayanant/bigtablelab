@@ -27,7 +27,7 @@ func main() {
 		dps      = flag.String("dps", "", "Data points per second.")
 		numSavers = flag.Int("num_savers", 100, "num saving goroutines")
 	)
-	//ex: bin/btwritestress -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -table sec -dps 300000 -num_savers 1000
+	//ex: bin/btwritestress -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -table sec -dps 10000
 
 	flag.Parse()
 	if *project == "" || *instance == "" || *authfile == "" || *table == "" || *dps == "" {
@@ -59,17 +59,17 @@ func main() {
 		go readChAndSaveToBT(ctx, ch, tbl, i)
 	}
 
-	go periodicallyPrintMetrics(ch)
+	go periodicallyPrintMetrics(ch, dataPointsPerSec)
 
 	select {}
 }
 
-func periodicallyPrintMetrics(ch chan []btutil.KeyValueEpochsec) {
+func periodicallyPrintMetrics(ch chan []btutil.KeyValueEpochsec, dps int) {
 	for {
 		n := atomic.LoadUint64(&numWrites)
 		if n != 0 {
 			avg := atomic.LoadUint64(&totalTimeMillis) / n
-			log.Printf("avg write time: [%v] millis, ch len: %v, cap: %v", avg, len(ch), cap(ch))
+			log.Printf("dps: [%v], avg write time: [%v] millis, ch len: %v, cap: %v", dps, avg, len(ch), cap(ch))
 		} else {
 			log.Printf("no writes yet")
 		}
