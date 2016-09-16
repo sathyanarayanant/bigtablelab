@@ -22,6 +22,7 @@ func main() {
 		dps      = flag.String("dps", "", "Data points per second.")
 		numSavers = flag.Int("num_savers", 100, "num saving goroutines")
 	)
+	//ex: bin/btwritestress -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -table sec -dps 300000 -num_savers 1000
 
 	flag.Parse()
 	if *project == "" || *instance == "" || *authfile == "" || *table == "" || *dps == "" {
