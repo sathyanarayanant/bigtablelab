@@ -25,7 +25,8 @@ func main() {
 		authfile  = flag.String("authjson", "", "Google application credentials json file.")
 		table     = flag.String("table", "", "Table to write metrics.")
 		dps       = flag.Int("dps", 100000, "Data points per second.")
-		numSavers = flag.Int("num_savers", 100, "num saving goroutines")
+		numWriters = flag.Int("num_writers", 100, "num saving goroutines")
+		writeBatchSize = flag.Int("write_batch_size", 50000, "write batch size")
 	)
 	//ex: bin/btwritestress -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -table sec -dps 10000
 
@@ -45,12 +46,12 @@ func main() {
 	go genMetrics(*dps, ch1)
 
 	ch2 := make(chan []btutil.KeyValueEpochsec) //unbuffered channel
-	go periodicallyDrainAndWriteToCh(ch1, 10000, time.Second, ch2)
+	go periodicallyDrainAndWriteToCh(ch1, writeBatchSize, time.Second, ch2)
 
 	ctx := context.Background()
-	log.Printf("num savers: [%v]", *numSavers)
-	for i := 0; i < *numSavers; i++ {
-		go saver(ctx, ch2, tbl)
+	log.Printf("num savers: [%v], write batch size [%v]", *numWriters, *writeBatchSize)
+	for i := 0; i < *numWriters; i++ {
+		go writer(ctx, ch2, tbl)
 	}
 
 	go periodicallyPrintMetrics(ch1, *dps)
@@ -99,7 +100,7 @@ func drain(input <-chan btutil.KeyValueEpochsec, maxSize int, timeout time.Durat
 	}
 }
 
-func saver(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec, tbl *bigtable.Table) {
+func writer(ctx context.Context, ch <-chan []btutil.KeyValueEpochsec, tbl *bigtable.Table) {
 	for slice := range ch {
 		if len(slice) != 0 {
 			save(ctx, slice, tbl)
