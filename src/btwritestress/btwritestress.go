@@ -26,7 +26,7 @@ func main() {
 		table     = flag.String("table", "", "Table to write metrics.")
 		dps       = flag.Int("dps", 100000, "Data points per second.")
 		numWriters = flag.Int("num_writers", 10, "num saving goroutines")
-		lingerMillis = flag.Int("linger_millis", 100, "write linger duration")
+		writeBatchSize = flag.Int("write_batch_size", 1000, "write batch size")
 	)
 	//ex: bin/btwritestress -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -table sec -dps 10000
 
@@ -46,10 +46,10 @@ func main() {
 	go genMetrics(*dps, ch1)
 
 	ch2 := make(chan []btutil.KeyValueEpochsec) //unbuffered channel
-	go periodicallyDrainAndWriteToCh(ch1, time.Millisecond * time.Duration(*lingerMillis), ch2)
+	go periodicallyDrainAndWriteToCh(ch1, *writeBatchSize, ch2)
 
 	ctx := context.Background()
-	log.Printf("num savers: [%v], write batch size [%v]", *numWriters, *lingerMillis)
+	log.Printf("num savers: [%v], write batch size [%v]", *numWriters, *writeBatchSize)
 	for i := 0; i < *numWriters; i++ {
 		go writer(ctx, ch2, tbl)
 	}
@@ -71,17 +71,17 @@ func periodicallyPrintMetrics(ch <-chan btutil.KeyValueEpochsec, incomingDps int
 	}
 }
 
-func periodicallyDrainAndWriteToCh(input <-chan btutil.KeyValueEpochsec, timeout time.Duration,
+func periodicallyDrainAndWriteToCh(input <-chan btutil.KeyValueEpochsec, maxSize int,
 	output chan<- []btutil.KeyValueEpochsec) {
 
 	for {
-		slice := drain(input, timeout)
+		slice := drain(input, maxSize)
 		output <- slice
 	}
 }
 
-func drain(input <-chan btutil.KeyValueEpochsec, timeout time.Duration) []btutil.KeyValueEpochsec {
-	timeoutCh := time.After(timeout)
+func drain(input <-chan btutil.KeyValueEpochsec, maxSize int) []btutil.KeyValueEpochsec {
+	timeoutCh := time.After(time.Second)
 
 	var slice []btutil.KeyValueEpochsec
 
@@ -89,6 +89,9 @@ func drain(input <-chan btutil.KeyValueEpochsec, timeout time.Duration) []btutil
 		select {
 		case kves := <-input:
 			slice = append(slice, kves)
+			if len(slice) >= maxSize {
+				return slice
+			}
 		case <-timeoutCh:
 			return slice
 		}
