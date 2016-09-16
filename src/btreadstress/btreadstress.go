@@ -21,7 +21,7 @@ type queryCondition struct {
 }
 
 var (
-	totalQueryTimeMillis, numQueries, totalQueryResultLen uint64
+	totalQueryTimeMillis, numQueries, totalLastDatapointAgeSeconds uint64
 )
 
 func main() {
@@ -65,9 +65,9 @@ func periodicallyPrintMetrics(ch chan queryCondition, qps int) {
 		n := atomic.LoadUint64(&numQueries)
 		if n != 0 {
 			avgTime := atomic.LoadUint64(&totalQueryTimeMillis) / n
-			avgResultLen := atomic.LoadUint64(&totalQueryResultLen) / n
-			log.Printf("qps: [%v], avg query time [%v] millis, avg result len [%v], ch len: %v, cap: %v",
-				qps, avgTime, avgResultLen, len(ch), cap(ch))
+			avgDelaySeconds := atomic.LoadUint64(&totalLastDatapointAgeSeconds) / n
+			log.Printf("qps: [%v], avg query time: %v millis, avg delay: %v seconds, ch len: %v, cap: %v",
+				qps, avgTime, avgDelaySeconds, len(ch), cap(ch))
 		} else {
 			log.Printf("no queries yet")
 		}
@@ -122,7 +122,9 @@ func query(ctx context.Context, qc queryCondition, tbl *bigtable.Table) {
 
 	atomic.AddUint64(&totalQueryTimeMillis, uint64(time.Since(start).Nanoseconds()/1000/1000))
 	atomic.AddUint64(&numQueries, 1)
-	atomic.AddUint64(&totalQueryResultLen, uint64(len(results)))
+
+	age := uint32(time.Now().Unix()) - results[len(results) - 1].Epochsec
+	atomic.AddUint64(&totalLastDatapointAgeSeconds, uint64(age))
 }
 
 func genQueries(n int, ch chan<- queryCondition) {
