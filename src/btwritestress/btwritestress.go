@@ -134,5 +134,5 @@ func getKey(i int) string {
 }
 
 func pctFull(ch chan<- []btutil.KeyValueEpochsec) float64 {
-	return float64(len(ch)) / float64(cap(ch))
+	return float64(len(ch)) * 100 / float64(cap(ch))
 }

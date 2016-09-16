@@ -25,6 +25,7 @@ func main() {
 		instance = flag.String("instance", "", "The name of the Cloud Bigtable instance.")
 		authfile = flag.String("authjson", "", "Google application credentials json file.")
 		qps      = flag.Int("qps", 1000, "queries per second. ")
+		numQueryWorkers = flag.Int("num_query_workers", 1000, "queries per second. ")
 	)
 
 	//eg: bin/btreadstress  -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -qps 500
@@ -43,8 +44,7 @@ func main() {
 	go genQueries(*qps, ch)
 
 	ctx := context.Background()
-	const num_query_workers = 100
-	for i := 0; i < num_query_workers; i++ {
+	for i := 0; i < *numQueryWorkers; i++ {
 		go queryWorker(ctx, ch, tbl)
 	}
 
@@ -91,7 +91,8 @@ func query(ctx context.Context, qc queryCondition, tbl *bigtable.Table) {
 		return true
 	})
 	if err != nil {
-		log.Fatalf("got err when calling readrows. err [%v]", err)
+		log.Printf("got err when calling readrows. err [%v]", err)
+		return
 	}
 
 	log.Printf("query completed in [%v]", time.Since(start))
@@ -120,5 +121,5 @@ func getKey(i int) string {
 }
 
 func pctFull(ch chan<- queryCondition) float64 {
-	return float64(len(ch)) / float64(cap(ch))
+	return float64(len(ch)) * 100 / float64(cap(ch))
 }
