@@ -25,8 +25,8 @@ func main() {
 		authfile  = flag.String("authjson", "", "Google application credentials json file.")
 		table     = flag.String("table", "", "Table to write metrics.")
 		dps       = flag.Int("dps", 100000, "Data points per second.")
-		numWriters = flag.Int("num_writers", 100, "num saving goroutines")
-		writeBatchSize = flag.Int("write_batch_size", 50000, "write batch size")
+		numWriters = flag.Int("num_writers", 10, "num saving goroutines")
+		writeBatchSize = flag.Int("write_batch_size", 1000, "write batch size")
 	)
 	//ex: bin/btwritestress -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -table sec -dps 10000
 
@@ -59,17 +59,15 @@ func main() {
 	select {}
 }
 
-func periodicallyPrintMetrics(ch <-chan btutil.KeyValueEpochsec, dps int) {
+func periodicallyPrintMetrics(ch <-chan btutil.KeyValueEpochsec, incomingDps int) {
+	start := time.Now()
 	for {
-		n := atomic.LoadUint64(&numWrites)
-		if n != 0 {
-			avg := atomic.LoadUint64(&totalTimeMicros) / n
-			log.Printf("dps: [%v], avg write time: [%v] micros, ch len: %v, cap: %v", dps, avg, len(ch), cap(ch))
-		} else {
-			log.Printf("no writes yet")
-		}
-
 		time.Sleep(time.Second * 5)
+		elapsed := time.Since(start)
+		n := atomic.LoadUint64(&numWrites)
+		outgoingDps := n / uint64(elapsed.Seconds())
+		log.Printf("dps in/out: %v/%v, ch len/cap: %v/%v, num writes: %v, elapsed: %v",
+			incomingDps, outgoingDps, len(ch), cap(ch), n, elapsed)
 	}
 }
 
