@@ -41,7 +41,7 @@ func main() {
 	client, _ := btutil.Clients(*project, *instance, *authfile)
 	tbl := client.Open(*table)
 
-	ch1 := make(chan btutil.KeyValueEpochsec, *dps*10)
+	ch1 := make(chan btutil.KeyValueEpochsec, *dps*100)
 
 	go genMetrics(*dps, ch1)
 
@@ -66,8 +66,9 @@ func periodicallyPrintMetrics(ch <-chan btutil.KeyValueEpochsec, incomingDps int
 		elapsed := time.Since(start)
 		n := atomic.LoadUint64(&numWrites)
 		outgoingDps := n / uint64(elapsed.Seconds())
-		log.Printf("dps in/out: %v/%v, ch len/cap: %v/%v, num writes: %v, elapsed: %v",
-			incomingDps, outgoingDps, len(ch), cap(ch), n, elapsed)
+		pctfull := len(ch) * 100 / cap(ch)
+		log.Printf("dps in/out: %v/%v, ch len/pctfull: %v/%v, num writes: %v, elapsed: %v",
+			incomingDps, outgoingDps, len(ch), pctfull, n, elapsed)
 	}
 }
 
