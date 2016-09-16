@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	totalTimeMillis, numWrites uint64
+	totalTimeMicros, numWrites uint64
 )
 
 func main() {
@@ -62,8 +62,8 @@ func periodicallyPrintMetrics(ch <-chan btutil.KeyValueEpochsec, dps int) {
 	for {
 		n := atomic.LoadUint64(&numWrites)
 		if n != 0 {
-			avg := atomic.LoadUint64(&totalTimeMillis) / n
-			log.Printf("dps: [%v], avg write time: [%v] millis, ch len: %v, cap: %v", dps, avg, len(ch), cap(ch))
+			avg := atomic.LoadUint64(&totalTimeMicros) / n
+			log.Printf("dps: [%v], avg write time: [%v] micros, ch len: %v, cap: %v", dps, avg, len(ch), cap(ch))
 		} else {
 			log.Printf("no writes yet")
 		}
@@ -136,16 +136,16 @@ func save(ctx context.Context, slice []btutil.KeyValueEpochsec, tbl *bigtable.Ta
 		return
 	}
 
-	atomic.AddUint64(&totalTimeMillis, uint64(time.Since(start).Nanoseconds()/1000/1000))
+	atomic.AddUint64(&totalTimeMicros, uint64(time.Since(start).Nanoseconds()/1000))
 	atomic.AddUint64(&numWrites, uint64(len(slice)))
 }
 
 func genMetrics(n int, ch chan<- btutil.KeyValueEpochsec) {
 
 	for {
-		now := time.Now().Unix()
+		start := time.Now()
 		for i := 0; i < n; i++ {
-			kves := btutil.KeyValueEpochsec{getKey(i), float64(now), uint32(now)}
+			kves := btutil.KeyValueEpochsec{getKey(i), float64(start.Unix()), uint32(start.Unix())}
 
 			select {
 			case ch <- kves:
@@ -154,7 +154,13 @@ func genMetrics(n int, ch chan<- btutil.KeyValueEpochsec) {
 			}
 		}
 
-		time.Sleep(time.Second * 1)
+		timeTaken := time.Since(start)
+
+		sleepDurationInNanos := 1000 * 1000 * 1000 - timeTaken.Nanoseconds()
+		if sleepDurationInNanos < 0 {
+			log.Printf("error - it takes more than 1 sec to generate [%v] metrics", n)
+		}
+		time.Sleep(time.Nanosecond * time.Duration(sleepDurationInNanos))
 	}
 }
 
