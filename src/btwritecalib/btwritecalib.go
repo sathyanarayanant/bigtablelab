@@ -10,6 +10,7 @@ import (
 
 	"cloud.google.com/go/bigtable"
 	"golang.org/x/net/context"
+	"math/rand"
 )
 
 func main() {
@@ -105,7 +106,7 @@ func genMetrics(n int, ch chan<- []btutil.KeyValueEpochsec) {
 
 		var slice []btutil.KeyValueEpochsec
 		for i := 0; i < n; i++ {
-			kves := btutil.KeyValueEpochsec{getKey(i), float64(start.Unix()), uint32(start.Unix())}
+			kves := btutil.KeyValueEpochsec{getKey(rand.Intn(1000 * 1000)), float64(start.Unix()), uint32(start.Unix())}
 			slice = append(slice, kves)
 		}
 
