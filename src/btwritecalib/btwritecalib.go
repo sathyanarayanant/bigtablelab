@@ -18,7 +18,7 @@ func main() {
 		instance       = flag.String("instance", "", "The name of the Cloud Bigtable instance.")
 		authfile       = flag.String("authjson", "", "Google application credentials json file.")
 		table          = flag.String("table", "", "Table to write metrics.")
-		numWriters     = flag.Int("num_writers", 10, "num saving goroutines")
+		numWriters     = flag.Int("num_writers", 100, "num saving goroutines")
 		writeBatchSize = flag.Int("write_batch_size", 1000, "write batch size")
 	)
 	//ex: bin/btwritestress -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -table sec -dps 10000
