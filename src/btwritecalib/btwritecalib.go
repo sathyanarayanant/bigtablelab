@@ -8,9 +8,10 @@ import (
 	"os"
 	"time"
 
+	"strconv"
+
 	"cloud.google.com/go/bigtable"
 	"golang.org/x/net/context"
-	"math/rand"
 )
 
 func main() {
@@ -23,8 +24,6 @@ func main() {
 		writeBatchSize = flag.Int("write_batch_size", 1000, "write batch size")
 	)
 	//ex: bin/btwritestress -authjson ~/zdatalab-credentials.json -instance sathyatest -project zdatalab-1316 -table sec -dps 10000
-
-	//optimal value for numSavers = num bigtable nodes * 100 for
 
 	flag.Parse()
 	if *project == "" || *instance == "" || *authfile == "" || *table == "" {
@@ -74,10 +73,12 @@ func write(ctx context.Context, slice []btutil.KeyValueEpochsec, tbl *bigtable.T
 	var muts []*bigtable.Mutation
 	for _, e := range slice {
 		mut := bigtable.NewMutation()
-		mut.Set("0", "0", 0, e.ValueByteArray())
+		col, _ := btutil.GetNCharStrLeadingZeros(strconv.Itoa(int(e.Epochsec%3600)), 4)
+		mut.Set("0", col, 0, e.ValueByteArray())
 
 		muts = append(muts, mut)
-		rowKeys = append(rowKeys, e.BTRowKeyStr())
+		//rowKeys = append(rowKeys, e.BTRowKeyStr())
+		rowKeys = append(rowKeys, btutil.GetBTKey(e.Key, e.Epochsec))
 	}
 
 	errors, err := tbl.ApplyBulk(ctx, rowKeys, muts)
@@ -106,7 +107,7 @@ func genMetrics(n int, ch chan<- []btutil.KeyValueEpochsec) {
 
 		var slice []btutil.KeyValueEpochsec
 		for i := 0; i < n; i++ {
-			kves := btutil.KeyValueEpochsec{getKey(rand.Intn(1000 * 1000)), float64(start.Unix()), uint32(start.Unix())}
+			kves := btutil.KeyValueEpochsec{getKey(i), float64(start.Unix()), uint32(start.Unix())}
 			slice = append(slice, kves)
 		}
 

@@ -4,10 +4,15 @@ import (
 	"io/ioutil"
 	"log"
 
+	"crypto/md5"
+	"errors"
+	"fmt"
+
 	"cloud.google.com/go/bigtable"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
+	"strconv"
 )
 
 func Clients(project, instance, authfile string) (*bigtable.Client, *bigtable.AdminClient) {
@@ -68,4 +73,34 @@ func CreateTableWithCF0IfMissing(adminClient *bigtable.AdminClient, table string
 	if err != nil {
 		log.Fatalf("cannot create column family [%v], err [%v]", column_family, err)
 	}
+}
+
+func GetBTKey(key string, epochSec uint32) string {
+	md5Sum := fmt.Sprintf("%x", md5.Sum([]byte(key)))
+
+	hour := int(epochSec / 3600)
+
+	sevenCharStr, _ := GetNCharStrLeadingZeros(strconv.Itoa(hour), 7)
+
+	return md5Sum + "_" + sevenCharStr
+}
+
+func GetNCharStrLeadingZeros(s string, n int) (string, error) {
+	if len(s) > n {
+		msg := fmt.Sprintf("cannot get %v char str for [%v]", s, n)
+		log.Printf(msg)
+		return "", errors.New(msg)
+	}
+
+	if len(s) == n {
+		return s, nil
+	}
+
+	numZeros := n - len(s)
+	var zeros string
+	for i := 0; i < numZeros; i++ {
+		zeros += "0"
+	}
+
+	return zeros + s, nil
 }
