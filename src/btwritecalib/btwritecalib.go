@@ -73,11 +73,10 @@ func write(ctx context.Context, slice []btutil.KeyValueEpochsec, tbl *bigtable.T
 	var muts []*bigtable.Mutation
 	for _, e := range slice {
 		mut := bigtable.NewMutation()
-		col, _ := btutil.GetNCharStrLeadingZeros(strconv.Itoa(int(e.Epochsec%3600)), 4)
-		mut.Set("0", col, 0, e.ValueByteArray())
+		secOfHour := int(e.Epochsec % 3600)
+		mut.Set("0", strconv.Itoa(secOfHour), 0, e.ValueByteArray())
 
 		muts = append(muts, mut)
-		//rowKeys = append(rowKeys, e.BTRowKeyStr())
 		rowKeys = append(rowKeys, btutil.GetBTKey(e.Key, e.Epochsec))
 	}
 
